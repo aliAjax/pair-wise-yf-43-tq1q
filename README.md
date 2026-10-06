@@ -24,7 +24,30 @@ python3 app.py --db ./data.db --port 8309
 
 ## 核心对象
 
-- `instrument`：仪器状态；`calibration`：校准记录；`method`：方法版本；`result`：检测结果。
+- `instrument`：仪器状态；`calibration`：校准记录；`method`：方法版本；`result`：检测结果；`delegation`：岗位转授记录。
+
+## 检测结果双人会签
+
+检测结果放行必须由分析员（`sign_analyst`）和授权人（`sign_authorizer`）各签一次，两签的实际签署人不能是同一人。状态流转：
+
+- `pending`：尚未签署。
+- `awaiting_analyst`：授权人已签，待分析员签。
+- `awaiting_authorizer`：分析员已签，待授权人签。
+- `released`：两签齐全，结果放行。
+
+签署时通过 `expected_version` 携带读到的版本号。两人同时提交第二签时，先写入者生效，后到者收到版本冲突（409）。
+
+## 岗位转授
+
+休假时管理员可把岗位临时转给同事：`POST /api/delegations`，请求体含 `role`（`analyst` 或 `authorizer`）、`from_user_id`（委托人）、`to_user_id`（受托人）、`valid_from`、`valid_to`。
+
+- 受托人在转授有效期内代签，操作记在委托人名下（签名的 `on_behalf_of` 字段）。
+- 无岗位且无有效转授而越权代签，直接拒绝（403）。
+- 岗位一有变化转授即失效：就同一 `role` 与 `from_user_id` 再次转授时，旧转授自动作废；也可通过 `revoke` 动作提前撤回。已作废或超出有效期的转授不能用于签署。
+
+## 撤回签名
+
+`POST /api/entities/<id>/actions`，`{"action":"withdraw_signature","data":{"sign_role":"analyst"}}`。撤回某一签后结果退回待该签状态，另一签保留；签署人、委托人或管理员可撤回。签名与转授均按时间写入审计。
 
 ## 主要接口
 

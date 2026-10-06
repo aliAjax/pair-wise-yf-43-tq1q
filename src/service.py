@@ -27,11 +27,18 @@ class DomainService:
                 if entity:
                     return entity
         self.rules.validate_create(actor, kind, payload, self._lookup)
+        supersede = []
+        if kind == "delegation":
+            supersede = self.rules.delegation_supersede_candidates(payload, self._lookup)
         entity_id = str(payload.pop("id", "") or uuid4())
         if self.repository.get_entity(entity_id):
             raise ConflictError("entity already exists: " + entity_id)
         status = self.rules.initial_status(kind)
         entity = self.repository.create_entity(entity_id, kind, status, payload, actor.user_id)
+        for delegation in supersede:
+            self.repository.update_entity(
+                delegation["id"], delegation["version"], "revoked", delegation["data"]
+            )
         self.audit.record(entity_id, actor, "create", None, status, {"kind": kind})
         if idempotency_key:
             self.repository.save_idempotency(actor.user_id, idempotency_key, entity_id)
@@ -41,6 +48,11 @@ class DomainService:
         entity = self.repository.get_entity(entity_id)
         if not entity:
             raise NotFoundError("entity not found: " + entity_id)
+        if expected_version is not None and int(expected_version) != entity["version"]:
+            raise ConflictError(
+                "version conflict: expected %s, found %s"
+                % (expected_version, entity["version"])
+            )
         expected = int(expected_version) if expected_version is not None else entity["version"]
         next_status, patch = self.rules.validate_transition(
             actor, entity, action, dict(data or {}), self._lookup
