@@ -17,12 +17,24 @@
   <p>这是最小演示页面。使用浏览器或 curl 调用 JSON API。</p>
   <p><button onclick="checkHealth()">检查服务状态</button></p>
   <pre id="result">等待操作</pre>
+  <h2>检测结果双人会签</h2>
+  <pre>POST /api/entities/&lt;result-id&gt;/actions
+{"action":"sign","data":{"instrument_id":"...","method_id":"...","value":4.2,"unit":"mg/L"},"expected_version":1}
+# 分析员首签 -> countersigning；授权人第二签 -> released
+# 撤回：{"action":"withdraw","data":{"slot":"authorizer"}}
+# 两签不能是同一人；同时提交第二签时后到者收到 409 版本冲突</pre>
+  <h2>岗位临时转授</h2>
+  <pre>POST /api/delegation
+{"principal_id":"analyst-1","agent_id":"backup-7","role":"analyst"}
+# 代理人请求带头：X-On-Behalf-Of: analyst-1
+# 代做记在委托人名下；审计同时留实际操作人；越权/过期/岗位变动后直接拒绝</pre>
   <h2>常用接口</h2>
   <pre>GET  /health
 GET  /api/&lt;kind&gt;
 POST /api/&lt;kind&gt;
 GET  /api/entities/&lt;id&gt;
-POST /api/entities/&lt;id&gt;/actions</pre>
+POST /api/entities/&lt;id&gt;/actions
+GET  /api/audit</pre>
 </main>
 <script>
 async function checkHealth() {
